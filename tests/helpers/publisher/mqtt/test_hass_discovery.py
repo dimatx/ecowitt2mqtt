@@ -2,6 +2,7 @@
 
 # pylint: disable=line-too-long
 # ruff: noqa: E501
+import json
 from typing import Any
 from unittest.mock import MagicMock, call
 
@@ -11,6 +12,8 @@ from aiomqtt import MqttError
 from ecowitt2mqtt.const import (
     CONF_DEFAULT_BATTERY_STRATEGY,
     CONF_HASS_DISCOVERY,
+    CONF_HASS_DISCOVERY_DISPLAY_PRECISION,
+    CONF_HASS_DISCOVERY_FRIENDLY_NAMES,
     CONF_HASS_ENTITY_ID_PREFIX,
 )
 from ecowitt2mqtt.core import Ecowitt
@@ -6810,3 +6813,206 @@ async def test_publish_numeric_battery_strategy(
             ),
         ]
     )
+
+
+def _get_published_configs(mock_client: MagicMock) -> dict[str, dict[str, Any]]:
+    """Get every published discovery config payload, keyed by payload key.
+
+    Args:
+        mock_client: A mock aiomqtt Client object.
+
+    Returns:
+        A dictionary of payload keys to parsed discovery config payloads.
+    """
+    configs = {}
+    for mock_call in mock_client.publish.call_args_list:
+        topic = mock_call.args[0]
+        if not topic.endswith("/config"):
+            continue
+        configs[topic.split("/")[-2]] = json.loads(mock_call.kwargs["payload"])
+    return configs
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "config,device_data_filename",
+    [(TEST_CONFIG_JSON | {CONF_HASS_DISCOVERY: True}, "payload_gw2000a_2.json")],
+)
+async def test_publish_friendly_names_disabled(
+    device_data: dict[str, Any],
+    ecowitt: Ecowitt,
+    mock_aiomqtt_client: MagicMock,
+) -> None:
+    """Test that entity names are raw payload keys by default.
+
+    Args:
+        device_data: A dictionary of device data.
+        ecowitt: A parsed Ecowitt object.
+        mock_aiomqtt_client: A mock aiomqtt Client object.
+    """
+    publishers = get_publishers(ecowitt.configs.default_config, mock_aiomqtt_client)
+    await publishers[0].async_publish(device_data)
+
+    configs = _get_published_configs(mock_aiomqtt_client)
+    assert configs
+    for payload_key, config in configs.items():
+        assert config["name"] == payload_key
+        assert "suggested_display_precision" not in config
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "config,device_data_filename",
+    [
+        (
+            TEST_CONFIG_JSON
+            | {CONF_HASS_DISCOVERY: True, CONF_HASS_DISCOVERY_FRIENDLY_NAMES: True},
+            "payload_gw2000a_2.json",
+        )
+    ],
+)
+async def test_publish_friendly_names_enabled(
+    device_data: dict[str, Any],
+    ecowitt: Ecowitt,
+    mock_aiomqtt_client: MagicMock,
+) -> None:
+    """Test publishing human-friendly entity names.
+
+    Args:
+        device_data: A dictionary of device data.
+        ecowitt: A parsed Ecowitt object.
+        mock_aiomqtt_client: A mock aiomqtt Client object.
+    """
+    publishers = get_publishers(ecowitt.configs.default_config, mock_aiomqtt_client)
+    await publishers[0].async_publish(device_data)
+
+    configs = _get_published_configs(mock_aiomqtt_client)
+    assert configs["tempin"]["name"] == "Indoor temperature"
+    assert configs["temp1"]["name"] == "Temperature 1"
+    assert configs["humidity1"]["name"] == "Humidity 1"
+    assert configs["baromrel"]["name"] == "Relative pressure"
+    assert configs["winddir"]["name"] == "Wind direction"
+    assert configs["runtime"]["name"] == "Runtime"
+
+    # Names must never be empty, and unique IDs must remain untouched:
+    for payload_key, config in configs.items():
+        assert config["name"]
+        assert config["unique_id"].endswith(f"_{payload_key}")
+
+    # A glob-backed data point must not name every channel identically:
+    channel_names = {
+        config["name"] for key, config in configs.items() if key.startswith("temp")
+    }
+    assert len(channel_names) == len([key for key in configs if key.startswith("temp")])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "config,device_data_filename",
+    [
+        (
+            TEST_CONFIG_JSON
+            | {CONF_HASS_DISCOVERY: True, CONF_HASS_DISCOVERY_DISPLAY_PRECISION: True},
+            "payload_gw2000a_2.json",
+        )
+    ],
+)
+async def test_publish_display_precision_enabled(
+    device_data: dict[str, Any],
+    ecowitt: Ecowitt,
+    mock_aiomqtt_client: MagicMock,
+) -> None:
+    """Test publishing a suggested display precision.
+
+    Args:
+        device_data: A dictionary of device data.
+        ecowitt: A parsed Ecowitt object.
+        mock_aiomqtt_client: A mock aiomqtt Client object.
+    """
+    publishers = get_publishers(ecowitt.configs.default_config, mock_aiomqtt_client)
+    await publishers[0].async_publish(device_data)
+
+    configs = _get_published_configs(mock_aiomqtt_client)
+
+    # Precision is resolved from the unit, so inches of mercury keep enough decimals
+    # to stay useful:
+    assert configs["baromrel"]["suggested_display_precision"] == 2
+    assert configs["tempin"]["suggested_display_precision"] == 1
+    assert configs["humidity1"]["suggested_display_precision"] == 0
+    assert configs["windspeed"]["suggested_display_precision"] == 1
+
+    # Unitless numeric data points fall back to their entity description:
+    assert configs["humidex"]["suggested_display_precision"] == 0
+
+    # String-valued data points get no precision at all:
+    assert "suggested_display_precision" not in configs["winddir_name"]
+    assert "suggested_display_precision" not in configs["thermalperception"]
+    assert "suggested_display_precision" not in configs["lightning_time"]
+
+    # Names are untouched when only precision is enabled:
+    assert configs["tempin"]["name"] == "tempin"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "config,device_data_filename",
+    [
+        (
+            TEST_CONFIG_JSON
+            | {CONF_HASS_DISCOVERY: True, CONF_HASS_DISCOVERY_DISPLAY_PRECISION: True},
+            "payload_gw2000a_wet.json",
+        )
+    ],
+)
+async def test_publish_display_precision_binary_sensor(
+    device_data: dict[str, Any],
+    ecowitt: Ecowitt,
+    mock_aiomqtt_client: MagicMock,
+) -> None:
+    """Test that binary sensors never receive a suggested display precision.
+
+    Args:
+        device_data: A dictionary of device data.
+        ecowitt: A parsed Ecowitt object.
+        mock_aiomqtt_client: A mock aiomqtt Client object.
+    """
+    publishers = get_publishers(ecowitt.configs.default_config, mock_aiomqtt_client)
+    await publishers[0].async_publish(device_data)
+
+    configs = _get_published_configs(mock_aiomqtt_client)
+    assert "suggested_display_precision" not in configs["srain_piezo"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "config,device_data_filename",
+    [
+        (
+            TEST_CONFIG_JSON
+            | {
+                CONF_HASS_DISCOVERY: True,
+                CONF_HASS_DISCOVERY_DISPLAY_PRECISION: True,
+                CONF_HASS_DISCOVERY_FRIENDLY_NAMES: True,
+            },
+            "payload_gw2000a_2.json",
+        )
+    ],
+)
+async def test_publish_friendly_names_and_display_precision(
+    device_data: dict[str, Any],
+    ecowitt: Ecowitt,
+    mock_aiomqtt_client: MagicMock,
+) -> None:
+    """Test publishing friendly names and display precision together.
+
+    Args:
+        device_data: A dictionary of device data.
+        ecowitt: A parsed Ecowitt object.
+        mock_aiomqtt_client: A mock aiomqtt Client object.
+    """
+    publishers = get_publishers(ecowitt.configs.default_config, mock_aiomqtt_client)
+    await publishers[0].async_publish(device_data)
+
+    configs = _get_published_configs(mock_aiomqtt_client)
+    assert configs["tempin"]["name"] == "Indoor temperature"
+    assert configs["tempin"]["suggested_display_precision"] == 1

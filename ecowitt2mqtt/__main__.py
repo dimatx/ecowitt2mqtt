@@ -18,6 +18,8 @@ from ecowitt2mqtt.const import (
     CONF_DISABLE_CALCULATED_DATA,
     CONF_ENDPOINT,
     CONF_HASS_DISCOVERY,
+    CONF_HASS_DISCOVERY_DISPLAY_PRECISION,
+    CONF_HASS_DISCOVERY_FRIENDLY_NAMES,
     CONF_HASS_DISCOVERY_PREFIX,
     CONF_HASS_ENTITY_ID_PREFIX,
     CONF_INPUT_DATA_FORMAT,
@@ -56,6 +58,8 @@ from ecowitt2mqtt.const import (
     ENV_DISABLE_CALCULATED_DATA,
     ENV_ENDPOINT,
     ENV_HASS_DISCOVERY,
+    ENV_HASS_DISCOVERY_DISPLAY_PRECISION,
+    ENV_HASS_DISCOVERY_FRIENDLY_NAMES,
     ENV_HASS_DISCOVERY_PREFIX,
     ENV_HASS_ENTITY_ID_PREFIX,
     ENV_INPUT_DATA_FORMAT,
@@ -97,6 +101,8 @@ ENV_VAR_TO_CONF_MAP = {
     ENV_DISABLE_CALCULATED_DATA: CONF_DISABLE_CALCULATED_DATA,
     ENV_ENDPOINT: CONF_ENDPOINT,
     ENV_HASS_DISCOVERY: CONF_HASS_DISCOVERY,
+    ENV_HASS_DISCOVERY_DISPLAY_PRECISION: CONF_HASS_DISCOVERY_DISPLAY_PRECISION,
+    ENV_HASS_DISCOVERY_FRIENDLY_NAMES: CONF_HASS_DISCOVERY_FRIENDLY_NAMES,
     ENV_HASS_DISCOVERY_PREFIX: CONF_HASS_DISCOVERY_PREFIX,
     ENV_HASS_ENTITY_ID_PREFIX: CONF_HASS_ENTITY_ID_PREFIX,
     ENV_LOCALE: CONF_LOCALE,
@@ -211,6 +217,21 @@ def get_cli_arguments(args: list[str]) -> dict[str, Any]:
         action="store_true",
         dest=CONF_HASS_DISCOVERY,
         help="Publish data in the Home Assistant MQTT Discovery format",
+    )
+    parser.add_argument(
+        "--hass-discovery-display-precision",
+        action="store_true",
+        dest=CONF_HASS_DISCOVERY_DISPLAY_PRECISION,
+        help=(
+            "Include a suggested display precision for Home Assistant sensors "
+            "(does not alter published values)"
+        ),
+    )
+    parser.add_argument(
+        "--hass-discovery-friendly-names",
+        action="store_true",
+        dest=CONF_HASS_DISCOVERY_FRIENDLY_NAMES,
+        help="Use human-friendly entity names in Home Assistant MQTT Discovery",
     )
     parser.add_argument(
         "--hass-discovery-prefix",

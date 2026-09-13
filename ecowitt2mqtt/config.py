@@ -140,6 +140,8 @@ class Config(BaseModel):
 
     # Optional Home Assistant MQTT Discovery parameters:
     hass_discovery: bool = False
+    hass_discovery_display_precision: bool = False
+    hass_discovery_friendly_names: bool = False
     hass_discovery_prefix: str = DEFAULT_HASS_DISCOVERY_PREFIX
     hass_entity_id_prefix: str | None = None
 
@@ -265,6 +267,14 @@ class Config(BaseModel):
     validate_hass_discovery = field_validator("hass_discovery", mode="before")(
         validate_boolean
     )
+
+    validate_hass_discovery_display_precision = field_validator(
+        "hass_discovery_display_precision", mode="before"
+    )(validate_boolean)
+
+    validate_hass_discovery_friendly_names = field_validator(
+        "hass_discovery_friendly_names", mode="before"
+    )(validate_boolean)
 
     @model_validator(mode="before")
     @classmethod

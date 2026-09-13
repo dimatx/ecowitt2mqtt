@@ -81,7 +81,22 @@ from ecowitt2mqtt.const import (
     DATA_POINT_WS90_VER,
     DATA_POINT_YEARLY_RAIN,
     DATA_POINT_YRAIN_PIEZO,
+    DEGREE,
     LOGGER,
+    PERCENTAGE,
+    STRIKES,
+    UV_INDEX,
+    UnitOfElectricPotential,
+    UnitOfIlluminance,
+    UnitOfLength,
+    UnitOfMemory,
+    UnitOfPollutionConcentration,
+    UnitOfPrecipitationRate,
+    UnitOfPressure,
+    UnitOfSpeed,
+    UnitOfTemperature,
+    UnitOfTime,
+    UnitOfVolume,
 )
 from ecowitt2mqtt.data import ProcessedData
 from ecowitt2mqtt.helpers.calculator import CalculatedDataPoint, DataPointType
@@ -91,6 +106,7 @@ from ecowitt2mqtt.helpers.calculator.battery import (
 )
 from ecowitt2mqtt.helpers.device import Device
 from ecowitt2mqtt.helpers.publisher.mqtt import MqttPublisher, generate_mqtt_payload
+from ecowitt2mqtt.helpers.publisher.mqtt.names import get_friendly_name
 from ecowitt2mqtt.helpers.typing import CalculatedValueType
 
 
@@ -152,6 +168,7 @@ class EntityDescription:
     entity_category: str | None = None
     icon: str | None = None
     state_class: str | None = None
+    suggested_display_precision: int | None = None
 
 
 @dataclass(frozen=True)
@@ -184,6 +201,7 @@ class HassDiscoveryInfo:
     default_entity_id: str | None = None
     qos: int = 1
     state_class: str | None = None
+    suggested_display_precision: int | None = None
     unit_of_measurement: str | None = None
 
 
@@ -211,6 +229,7 @@ ENTITY_DESCRIPTIONS = {
     ),
     DATA_POINT_BEAUFORT_SCALE: EntityDescription(
         icon="mdi:weather-windy",
+        suggested_display_precision=0,
     ),
     DATA_POINT_CO2: EntityDescription(
         device_class=DeviceClass.CO2,
@@ -241,6 +260,7 @@ ENTITY_DESCRIPTIONS = {
     ),
     DATA_POINT_GLOB_GAIN_PIEZO: EntityDescription(
         entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=2,
     ),
     DATA_POINT_GLOB_GUST: EntityDescription(
         icon="mdi:weather-windy",
@@ -313,6 +333,7 @@ ENTITY_DESCRIPTIONS = {
     DATA_POINT_HUMIDEX: EntityDescription(
         icon="mdi:water",
         state_class=StateClass.MEASUREMENT,
+        suggested_display_precision=0,
     ),
     DATA_POINT_HUMIDEX_PERCEPTION: EntityDescription(
         icon="mdi:water",
@@ -394,6 +415,7 @@ ENTITY_DESCRIPTIONS = {
     DATA_POINT_RELATIVE_STRAIN_INDEX: EntityDescription(
         icon="mdi:heat-wave",
         state_class=StateClass.MEASUREMENT,
+        suggested_display_precision=1,
     ),
     DATA_POINT_RELATIVE_STRAIN_INDEX_PERCEPTION: EntityDescription(
         icon="mdi:heat-wave",
@@ -419,12 +441,69 @@ ENTITY_DESCRIPTIONS = {
         device_class=DeviceClass.TEMPERATURE,
         state_class=StateClass.MEASUREMENT,
     ),
-    DATA_POINT_WS90_VER: EntityDescription(entity_category=EntityCategory.DIAGNOSTIC),
+    DATA_POINT_WS90_VER: EntityDescription(
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=0,
+    ),
 }
 
 PLATFORM_MAP = {
     DataPointType.BOOLEAN: Platform.BINARY_SENSOR,
     DataPointType.NON_BOOLEAN: Platform.SENSOR,
+}
+
+# Suggested display precision, keyed by unit of measurement. Precision is primarily a
+# property of the unit rather than of the data point: 29.616 inHg needs two decimals to
+# be useful, while the same reading in hPa needs at most one. Note that several units
+# share a string across unit enums (e.g. inches of length and of precipitation), so each
+# string is only listed once here:
+UNIT_DISPLAY_PRECISION: dict[str, int] = {
+    DEGREE: 0,
+    PERCENTAGE: 0,
+    STRIKES: 0,
+    UV_INDEX: 0,
+    UnitOfElectricPotential.VOLT: 2,
+    UnitOfIlluminance.FOOT_CANDLES: 0,
+    UnitOfIlluminance.KILOFOOT_CANDLES: 2,
+    UnitOfIlluminance.KILOLUX: 2,
+    UnitOfIlluminance.LUX: 0,
+    UnitOfIlluminance.WATTS_PER_SQUARE_METER: 1,
+    UnitOfLength.CENTIMETERS: 1,
+    UnitOfLength.FEET: 1,
+    UnitOfLength.INCHES: 2,
+    UnitOfLength.KILOMETERS: 1,
+    UnitOfLength.METERS: 1,
+    UnitOfLength.MILES: 1,
+    UnitOfLength.MILLIMETERS: 1,
+    UnitOfLength.YARD: 1,
+    UnitOfMemory.BYTES: 0,
+    UnitOfPollutionConcentration.MICROGRAMS_PER_CUBIC_METER: 1,
+    UnitOfPollutionConcentration.PARTS_PER_MILLION: 0,
+    UnitOfPrecipitationRate.MILLIMETERS_PER_HOUR: 1,
+    UnitOfPressure.BAR: 3,
+    UnitOfPressure.CBAR: 2,
+    UnitOfPressure.HPA: 1,
+    UnitOfPressure.INHG: 2,
+    UnitOfPressure.KPA: 2,
+    UnitOfPressure.MBAR: 1,
+    UnitOfPressure.MMHG: 1,
+    UnitOfPressure.PA: 0,
+    UnitOfPressure.PSI: 2,
+    UnitOfSpeed.FEET_PER_SECOND: 1,
+    UnitOfSpeed.INCHES_PER_DAY: 2,
+    UnitOfSpeed.INCHES_PER_HOUR: 2,
+    UnitOfSpeed.KILOMETERS_PER_HOUR: 1,
+    UnitOfSpeed.KNOTS: 1,
+    UnitOfSpeed.METERS_PER_SECOND: 1,
+    UnitOfSpeed.MILES_PER_HOUR: 1,
+    UnitOfSpeed.MILLIMETERS_PER_DAY: 1,
+    UnitOfTemperature.CELSIUS: 1,
+    UnitOfTemperature.FAHRENHEIT: 1,
+    UnitOfTemperature.KELVIN: 1,
+    UnitOfTime.MINUTES: 0,
+    UnitOfTime.SECONDS: 0,
+    UnitOfVolume.GRAMS_PER_CUBIC_METER: 2,
+    UnitOfVolume.POUNDS_PER_CUBIC_FOOT: 6,
 }
 
 STATE_CLASS_OVERRIDES = {
@@ -491,6 +570,36 @@ class HomeAssistantDiscoveryPublisher(MqttPublisher):  # pylint: disable=too-few
 
         return data_point_key
 
+    def _get_display_precision(
+        self, data_point: CalculatedDataPoint, description: EntityDescription | None
+    ) -> int | None:
+        """Get the suggested display precision for a data point.
+
+        This is a display-only hint for Home Assistant; the published state value is
+        never rounded or otherwise altered by it.
+
+        Args:
+            data_point: A parsed CalculatedDataPoint object.
+            description: The data point's EntityDescription (if one exists).
+
+        Returns:
+            A number of decimal places (if one is applicable).
+        """
+        if PLATFORM_MAP[data_point.data_type] is not Platform.SENSOR:
+            # Precision is meaningless for binary sensors:
+            return None
+
+        if data_point.unit is not None:
+            return UNIT_DISPLAY_PRECISION.get(data_point.unit)
+
+        # Unitless data points are only given a precision if their entity description
+        # opts in; this keeps string-valued data points (perceptions, zones, cardinal
+        # directions, etc.) out of it:
+        if description is not None:
+            return description.suggested_display_precision
+
+        return None
+
     def _get_discovery_info(
         self, device: Device, payload_key: str, data_point: CalculatedDataPoint
     ) -> HassDiscoveryInfo:
@@ -511,7 +620,11 @@ class HomeAssistantDiscoveryPublisher(MqttPublisher):  # pylint: disable=too-few
                 sw_version=device.station_type,
             ),
             json_attributes_topic=f"{base_topic}/attributes",
-            name=payload_key,
+            name=(
+                get_friendly_name(payload_key)
+                if self._config.hass_discovery_friendly_names
+                else payload_key
+            ),
             retain=self._config.mqtt_retain,
             state_topic=f"{base_topic}/state",
             unique_id=f"{device.unique_id}_{payload_key}",
@@ -540,6 +653,11 @@ class HomeAssistantDiscoveryPublisher(MqttPublisher):  # pylint: disable=too-few
         else:
             LOGGER.debug(
                 "No entity description found for data point %s", data_point_key
+            )
+
+        if self._config.hass_discovery_display_precision:
+            discovery.suggested_display_precision = self._get_display_precision(
+                data_point, description
             )
 
         return discovery

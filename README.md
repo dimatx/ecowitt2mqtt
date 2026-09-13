@@ -126,7 +126,7 @@ Within the `Upload Interval`, data should begin to appear in the MQTT broker.
 
 ```
 usage: ecowitt2mqtt [-h] [--version] [--battery-override BATTERY_OVERRIDES] [--boolean-battery-true-value boolean_battery_true_value] [-c config] [--default-battery-strategy default_battery_strategy] [--diagnostics] [--disable-calculated-data] [-e endpoint] [--hass-discovery]
-                    [--hass-discovery-prefix hass_discovery_prefix] [--hass-entity-id-prefix hass_entity_id_prefix] [--input-data-format input_data_format] [--input-unit-system input_unit_system] [-b mqtt_broker] [-p mqtt_password] [--mqtt-port mqtt_port] [--mqtt-retain] [--mqtt-tls] [-t mqtt_topic]
+                    [--hass-discovery-display-precision] [--hass-discovery-friendly-names] [--hass-discovery-prefix hass_discovery_prefix] [--hass-entity-id-prefix hass_entity_id_prefix] [--input-data-format input_data_format] [--input-unit-system input_unit_system] [-b mqtt_broker] [-p mqtt_password] [--mqtt-port mqtt_port] [--mqtt-retain] [--mqtt-tls] [-t mqtt_topic]
                     [-u mqtt_username] [--output-unit-system output_unit_system] [--output-unit-accumulated-precipitation output_unit_accumulated_precipitation] [--output-unit-distance output_unit_distance] [--output-unit-humidity output_unit_humidity]
                     [--output-unit-illuminance output_unit_illuminance] [--output-unit-precipitation-rate output_unit_precipitation_rate] [--output-unit-pressure output_unit_pressure] [--output-unit-speed output_unit_speed] [--output-unit-temperature output_unit_temperature] [--port port]
                     [--precision precision] [--raw-data] [-v]
@@ -150,6 +150,10 @@ options:
   -e endpoint, --endpoint endpoint
                         The relative endpoint/path to serve ecowitt2mqtt on (default: /data/report)
   --hass-discovery      Publish data in the Home Assistant MQTT Discovery format
+  --hass-discovery-display-precision
+                        Include a suggested display precision for Home Assistant sensors (does not alter published values)
+  --hass-discovery-friendly-names
+                        Use human-friendly entity names in Home Assistant MQTT Discovery
   --hass-discovery-prefix hass_discovery_prefix
                         The Home Assistant MQTT Discovery topic prefix to use (default: homeassistant)
   --hass-entity-id-prefix hass_entity_id_prefix
@@ -210,6 +214,10 @@ options:
   sensors (default: `false`)
 - `ECOWITT2MQTT_ENDPOINT`: the relative endpoint/path to serve ecowitt2mqtt on (default:
   `/data/report`)
+- `ECOWITT2MQTT_HASS_DISCOVERY_DISPLAY_PRECISION`: include a suggested display precision
+  for Home Assistant sensors (default: `false`)
+- `ECOWITT2MQTT_HASS_DISCOVERY_FRIENDLY_NAMES`: use human-friendly entity names in Home
+  Assistant MQTT Discovery (default: `false`)
 - `ECOWITT2MQTT_HASS_DISCOVERY_PREFIX`: the Home Assistant discovery prefix to use
   (default: `homeassistant`)
 - `ECOWITT2MQTT_HASS_DISCOVERY`: publish data in the Home Assistant MQTT Discovery format
@@ -638,6 +646,56 @@ $ ecowitt2mqtt \
     --mqtt-password=password \
     --hass-discovery
 ```
+
+### Friendly Entity Names
+
+By default, entities are named after the raw Ecowitt payload key they come from (such as
+`tempin`, `winddir` or `soilmoisture1`). Passing the `--hass-discovery-friendly-names`
+flag will instead publish human-readable names (`Indoor temperature`, `Wind direction`
+and `Soil moisture 1`, respectively):
+
+```bash
+$ ecowitt2mqtt \
+    --mqtt-broker=192.168.1.101 \
+    --mqtt-username=user \
+    --mqtt-****** \
+    --hass-discovery \
+    --hass-discovery-friendly-names
+```
+
+Names are deliberately kept free of the device/station name, since Home Assistant
+already prefixes it in the UI.
+
+Note that this flag only affects the entity *name*: unique IDs, entity IDs and MQTT
+topics are left untouched, so enabling it will not orphan any existing entity or its
+history. Home Assistant will not rename an entity that you have already renamed
+yourself.
+
+Names are currently only available in English. Any payload key that isn't recognized
+falls back to being named after the raw key, exactly as it is today.
+
+### Suggested Display Precision
+
+Passing the `--hass-discovery-display-precision` flag will include a
+`suggested_display_precision` value for numeric Home Assistant sensors:
+
+```bash
+$ ecowitt2mqtt \
+    --mqtt-broker=192.168.1.101 \
+    --mqtt-username=user \
+    --mqtt-****** \
+    --hass-discovery \
+    --hass-discovery-display-precision
+```
+
+This is a display-only hint: Home Assistant uses it to decide how many decimal places to
+show, but the value published to MQTT is never rounded or otherwise altered (which means
+that non-Home Assistant subscribers continue to receive full precision). This is
+different from the `--precision` option, which *does* round published values.
+
+Precision is derived from each data point's unit, so a pressure reported in `inHg` keeps
+more decimal places than the same reading in `hPa`. The value is only a suggestion – it
+can be overridden per-entity in the Home Assistant UI.
 
 ### Custom Entity ID Prefix
 
