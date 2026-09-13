@@ -19,7 +19,10 @@ from ecowitt2mqtt.const import (
 from ecowitt2mqtt.core import Ecowitt
 from ecowitt2mqtt.helpers.calculator.battery import BatteryStrategy
 from ecowitt2mqtt.helpers.publisher.factory import get_publishers
-from ecowitt2mqtt.helpers.publisher.mqtt.hass import HomeAssistantDiscoveryPublisher
+from ecowitt2mqtt.helpers.publisher.mqtt.hass import (
+    ENTITY_DESCRIPTIONS,
+    HomeAssistantDiscoveryPublisher,
+)
 from tests.common import TEST_CONFIG_JSON, TEST_HASS_ENTITY_ID_PREFIX
 
 
@@ -6813,6 +6816,24 @@ async def test_publish_numeric_battery_strategy(
             ),
         ]
     )
+
+
+def test_unitless_precision_requires_a_state_class() -> None:
+    """Test that a unitless data point only declares a precision it can actually use.
+
+    Home Assistant's frontend decides whether to number-format a state from the
+    presence of a unit of measurement or a state class, so declaring a precision on a
+    unitless data point that has no state class writes an entity registry option that
+    is then ignored. It is also a sign the data point isn't really a measurement at
+    all (a firmware version, for instance).
+    """
+    for data_point_key, description in ENTITY_DESCRIPTIONS.items():
+        if description.suggested_display_precision is None:
+            continue
+        assert description.state_class is not None, (
+            f"{data_point_key} declares a display precision but no state class, so "
+            "Home Assistant will ignore it"
+        )
 
 
 def _get_published_configs(mock_client: MagicMock) -> dict[str, dict[str, Any]]:

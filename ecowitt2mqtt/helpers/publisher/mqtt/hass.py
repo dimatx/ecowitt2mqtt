@@ -229,7 +229,6 @@ ENTITY_DESCRIPTIONS = {
     ),
     DATA_POINT_BEAUFORT_SCALE: EntityDescription(
         icon="mdi:weather-windy",
-        suggested_display_precision=0,
     ),
     DATA_POINT_CO2: EntityDescription(
         device_class=DeviceClass.CO2,
@@ -260,7 +259,6 @@ ENTITY_DESCRIPTIONS = {
     ),
     DATA_POINT_GLOB_GAIN_PIEZO: EntityDescription(
         entity_category=EntityCategory.DIAGNOSTIC,
-        suggested_display_precision=2,
     ),
     DATA_POINT_GLOB_GUST: EntityDescription(
         icon="mdi:weather-windy",
@@ -443,7 +441,6 @@ ENTITY_DESCRIPTIONS = {
     ),
     DATA_POINT_WS90_VER: EntityDescription(
         entity_category=EntityCategory.DIAGNOSTIC,
-        suggested_display_precision=0,
     ),
 }
 
@@ -578,6 +575,12 @@ class HomeAssistantDiscoveryPublisher(MqttPublisher):  # pylint: disable=too-few
         This is a display-only hint for Home Assistant; the published state value is
         never rounded or otherwise altered by it.
 
+        Note that Home Assistant's frontend only formats states it considers numeric,
+        which it decides from the presence of a unit of measurement or a state class.
+        A unitless data point therefore only gets a precision if its entity description
+        also carries a state class -- anything else would be written to the entity
+        registry and then ignored.
+
         Args:
             data_point: A parsed CalculatedDataPoint object.
             description: The data point's EntityDescription (if one exists).
@@ -593,8 +596,10 @@ class HomeAssistantDiscoveryPublisher(MqttPublisher):  # pylint: disable=too-few
             return UNIT_DISPLAY_PRECISION.get(data_point.unit)
 
         # Unitless data points are only given a precision if their entity description
-        # opts in; this keeps string-valued data points (perceptions, zones, cardinal
-        # directions, etc.) out of it:
+        # opts in. Doing so is only useful alongside a state class, since Home
+        # Assistant won't number-format a state that has neither a unit nor a state
+        # class; this also keeps string-valued data points (perceptions, zones,
+        # cardinal directions, etc.) out of it:
         if description is not None:
             return description.suggested_display_precision
 
