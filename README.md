@@ -697,6 +697,13 @@ Precision is derived from each data point's unit, so a pressure reported in `inH
 more decimal places than the same reading in `hPa`. The value is only a suggestion – it
 can be overridden per-entity in the Home Assistant UI.
 
+Note that Home Assistant only writes a suggested display precision to its entity
+registry when an entity is *added*, not when an already-registered entity receives an
+updated discovery payload. Enabling this option therefore has no visible effect on
+existing entities until the MQTT integration is reloaded (Settings → Devices & Services
+→ MQTT → ⋮ → Reload) or Home Assistant is restarted. Newly discovered entities pick it
+up immediately.
+
 ### Custom Entity ID Prefix
 
 You can provide a custom prefix for all Home Assistant entities via the
