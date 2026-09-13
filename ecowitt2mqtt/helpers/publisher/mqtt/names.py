@@ -11,6 +11,17 @@ into the entity descriptions) for two reasons:
 
 Names use sentence case to match Home Assistant conventions, and never repeat the
 device (station) name, because Home Assistant already prefixes it in the UI.
+
+Wording is cross-checked against Ecowitt's own Home Assistant integration
+(https://github.com/Ecowitt/ha-ecowitt-iot) and the key tables maintained by
+home-assistant-libs/aioecowitt.
+
+Every name here must be traceable to at least one of: Ecowitt's own integration,
+aioecowitt, this project's test fixtures, or a data point this project declares in
+const.py. A key whose meaning rests only on inference, or on sources that contradict
+each other, is deliberately left out so that it falls back to its raw payload key --
+showing a user "thi_ch1" is honest, whereas showing them a confidently wrong name is
+not. "ldspw_ch*", "noise_ch*", "peak_ch*" and "thi_ch*" are absent for this reason.
 """
 
 from __future__ import annotations
@@ -42,6 +53,12 @@ from ecowitt2mqtt.util import glob_search
 
 CHANNEL_PATTERN: Final = re.compile(r"^(?P<stem>.*?)(?P<channel>\d+)$")
 
+# Some keys end in a digit that belongs to the measurement's name rather than to a
+# channel number. The WH45/WH46 air quality sensor is the important case: every one of
+# its keys ends in "co2", so naive channel-splitting would turn "pm1_co2" into stem
+# "pm1_co" plus channel "2":
+NON_CHANNEL_TAIL_PATTERN: Final = re.compile(r"(?:^|_)(?:co2|pm1|pm4|pm10|pm25)$")
+
 # Layer 1: names for exact payload keys. This covers every fixed, well-known Ecowitt
 # key (i.e., everything that isn't distinguished by a channel number):
 FRIENDLY_NAMES: Final[dict[str, str]] = {
@@ -49,9 +66,14 @@ FRIENDLY_NAMES: Final[dict[str, str]] = {
     "baromrel": "Relative pressure",
     "batt_co2": "Air quality sensor battery",
     "beaufortscale": "Beaufort scale",
+    "bgt": "Black globe temperature",
+    "bgtbatt": "WN38 battery",
     "co2": "CO2",
     "co2_24h": "CO2 (24-hour average)",
     "co2_batt": "Air quality sensor battery",
+    "co2in": "Indoor CO2",
+    "co2in_24h": "Indoor CO2 (24-hour average)",
+    "console_batt": "Console battery voltage",
     "dailyrain": "Daily rain",
     "dewpoint": "Dew point",
     "drain_piezo": "Daily rain (piezo)",
@@ -72,11 +94,13 @@ FRIENDLY_NAMES: Final[dict[str, str]] = {
     "humi_co2": "Air quality sensor humidity",
     "humidex": "Humidex",
     "humidex_perception": "Humidex perception",
-    "humidity": "Humidity",
+    "humidity": "Outdoor humidity",
     "humidityabs": "Absolute humidity",
     "humidityabsin": "Indoor absolute humidity",
     "humidityin": "Indoor humidity",
     "interval": "Update interval",
+    "last24hrain": "Last 24 hours rain",
+    "last24hrain_piezo": "Last 24 hours rain (piezo)",
     "lightning": "Lightning distance",
     "lightning_num": "Lightning strikes",
     "lightning_time": "Last lightning strike",
@@ -85,8 +109,12 @@ FRIENDLY_NAMES: Final[dict[str, str]] = {
     "mrain_piezo": "Monthly rain (piezo)",
     "pm10_24h_co2": "Air quality sensor PM10 (24-hour average)",
     "pm10_co2": "Air quality sensor PM10",
+    "pm1_24h_co2": "Air quality sensor PM1 (24-hour average)",
+    "pm1_co2": "Air quality sensor PM1",
     "pm25_24h_co2": "Air quality sensor PM2.5 (24-hour average)",
     "pm25_co2": "Air quality sensor PM2.5",
+    "pm4_24h_co2": "Air quality sensor PM4 (24-hour average)",
+    "pm4_co2": "Air quality sensor PM4",
     "rainrate": "Rain rate",
     "relative_strain_index": "Relative strain index",
     "relative_strain_index_perception": "Relative strain index perception",
@@ -101,15 +129,18 @@ FRIENDLY_NAMES: Final[dict[str, str]] = {
     "simmerindex": "Simmer index",
     "simmerzone": "Simmer zone",
     "solarradiation": "Solar irradiance",
+    "solarradiation_lux": "Solar illuminance",
     "solarradiation_perceived": "Perceived solar irradiance",
     "srain_piezo": "Rain detected (piezo)",
-    "temp": "Temperature",
+    "temp": "Outdoor temperature",
     "tempin": "Indoor temperature",
     "tf_co2": "Air quality sensor temperature",
     "thermalperception": "Thermal perception",
     "totalrain": "Total rain",
+    "train_piezo": "Total rain (piezo)",
     "uv": "UV index",
     "vpd": "Vapour pressure deficit",
+    "wbgt": "Wet bulb globe temperature",
     "weeklyrain": "Weekly rain",
     "wh25batt": "WH25 battery",
     "wh26batt": "WH26 battery",
@@ -118,6 +149,7 @@ FRIENDLY_NAMES: Final[dict[str, str]] = {
     "wh65batt": "WH65 battery",
     "wh68batt": "WH68 battery",
     "wh80batt": "WH80 battery",
+    "wh85batt": "WH85 battery",
     "wh90batt": "WH90 battery",
     "wh90battpc": "WH90 battery",
     "windchill": "Wind chill",
@@ -127,7 +159,9 @@ FRIENDLY_NAMES: Final[dict[str, str]] = {
     "windgust": "Wind gust",
     "windspdmph_avg10m": "Wind speed (10-minute average)",
     "windspeed": "Wind speed",
+    "wn20batt": "WN20 battery",
     "wrain_piezo": "Weekly rain (piezo)",
+    "ws85cap_volt": "WS85 capacitor voltage",
     "ws90_ver": "WS90 firmware version",
     "ws90cap_volt": "WS90 capacitor voltage",
     "yearlyrain": "Yearly rain",
@@ -137,8 +171,16 @@ FRIENDLY_NAMES: Final[dict[str, str]] = {
 # Layer 2: templates for payload keys that end in a channel number. The key is the
 # payload key with its trailing digits removed:
 CHANNEL_FRIENDLY_NAMES: Final[dict[str, str]] = {
+    "air_ch": "Air gap {channel}",
     "batt": "Battery {channel}",
+    # The WH54 laser distance sensor measures any distance (tank level, snow depth,
+    # ...), so these names deliberately avoid implying a liquid. Note that "thi_ch*" is
+    # deliberately absent: aioecowitt and WernerKr's WeeWX skin disagree about what it
+    # means, so it falls back to its raw key rather than shipping a coin-flip name.
+    "depth_ch": "Measured depth {channel}",
     "humidity": "Humidity {channel}",
+    "ldsbatt": "LDS sensor battery {channel}",
+    "ldsheat_ch": "LDS heater count {channel}",
     "leaf_batt": "Leaf wetness sensor battery {channel}",
     "leafwetness_ch": "Leaf wetness {channel}",
     "leak_ch": "Water leak {channel}",
@@ -146,6 +188,13 @@ CHANNEL_FRIENDLY_NAMES: Final[dict[str, str]] = {
     "pm25_avg_24h_ch": "PM2.5 sensor {channel} (24-hour average)",
     "pm25_ch": "PM2.5 sensor {channel}",
     "pm25batt": "PM2.5 sensor battery {channel}",
+    "soil_ec": "Soil conductivity {channel}",
+    "soil_ec_ad": "Soil conductivity raw AD {channel}",
+    "soil_ec_batt": "Soil conductivity sensor battery {channel}",
+    "soil_ec_hum": "Soil moisture {channel} (conductivity sensor)",
+    "soil_ec_hum_ad": "Soil moisture raw AD {channel} (conductivity sensor)",
+    "soil_ec_temp": "Soil temperature {channel}",
+    "soilad": "Soil moisture raw AD {channel}",
     "soilbatt": "Soil moisture sensor battery {channel}",
     "soilmoisture": "Soil moisture {channel}",
     "temp": "Temperature {channel}",
@@ -191,6 +240,8 @@ def _split_channel(key: str) -> tuple[str, str | None]:
     Returns:
         A tuple of the remaining stem and the channel number (if one exists).
     """
+    if NON_CHANNEL_TAIL_PATTERN.search(key):
+        return (key, None)
     if match := CHANNEL_PATTERN.match(key):
         return (match["stem"], match["channel"])
     return (key, None)
