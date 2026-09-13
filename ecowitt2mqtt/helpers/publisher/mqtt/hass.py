@@ -35,7 +35,6 @@ from ecowitt2mqtt.const import (
     DATA_POINT_GLOB_R_RAIN,
     DATA_POINT_GLOB_RAIN,
     DATA_POINT_GLOB_RAIN_PIEZO,
-    DATA_POINT_GLOB_SOILAD,
     DATA_POINT_GLOB_TEMP,
     DATA_POINT_GLOB_TF,
     DATA_POINT_GLOB_VOLT,
@@ -109,7 +108,6 @@ from ecowitt2mqtt.helpers.device import Device
 from ecowitt2mqtt.helpers.publisher.mqtt import MqttPublisher, generate_mqtt_payload
 from ecowitt2mqtt.helpers.publisher.mqtt.names import get_friendly_name
 from ecowitt2mqtt.helpers.typing import CalculatedValueType
-from ecowitt2mqtt.util import glob_search
 
 
 class DeviceClass(StrEnum):
@@ -508,14 +506,6 @@ UNIT_DISPLAY_PRECISION: dict[str, int] = {
     UnitOfVolume.POUNDS_PER_CUBIC_FOOT: 6,
 }
 
-# Display precision for unitless numeric data points. These carry a channel number, so
-# an exact entity description lookup can't match them; they're resolved with the same
-# glob search the rest of the project uses:
-GLOB_DISPLAY_PRECISION: dict[str, int] = {
-    # The raw analog reading behind soil moisture, reported as whole counts:
-    DATA_POINT_GLOB_SOILAD: 0,
-}
-
 STATE_CLASS_OVERRIDES = {
     DATA_POINT_DAILY_RAIN: StateClass.TOTAL,
     DATA_POINT_DRAIN_PIEZO: StateClass.TOTAL,
@@ -605,14 +595,10 @@ class HomeAssistantDiscoveryPublisher(MqttPublisher):  # pylint: disable=too-few
         # Unitless data points are only given a precision if their entity description
         # opts in; this keeps string-valued data points (perceptions, zones, cardinal
         # directions, etc.) out of it:
-        if (
-            description is not None
-            and description.suggested_display_precision is not None
-        ):
+        if description is not None:
             return description.suggested_display_precision
 
-        _, precision = glob_search(GLOB_DISPLAY_PRECISION, data_point.data_point_key)
-        return precision
+        return None
 
     def _get_discovery_info(
         self, device: Device, payload_key: str, data_point: CalculatedDataPoint

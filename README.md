@@ -704,6 +704,12 @@ existing entities until the MQTT integration is reloaded (Settings → Devices &
 → MQTT → ⋮ → Reload) or Home Assistant is restarted. Newly discovered entities pick it
 up immediately.
 
+Also note that Home Assistant's frontend only applies number formatting to states it
+considers numeric, which it decides from the presence of a unit of measurement or a
+state class. A handful of data points have neither (`soilad*` and `ws90_ver`, for
+example); those are displayed exactly as published, and no suggested display precision –
+whether from this option or set by hand in the UI – will change that.
+
 ### Custom Entity ID Prefix
 
 You can provide a custom prefix for all Home Assistant entities via the

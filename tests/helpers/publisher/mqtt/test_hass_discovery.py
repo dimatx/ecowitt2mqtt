@@ -17,7 +17,6 @@ from ecowitt2mqtt.const import (
     CONF_HASS_ENTITY_ID_PREFIX,
 )
 from ecowitt2mqtt.core import Ecowitt
-from ecowitt2mqtt.helpers.calculator import CalculatedDataPoint
 from ecowitt2mqtt.helpers.calculator.battery import BatteryStrategy
 from ecowitt2mqtt.helpers.publisher.factory import get_publishers
 from ecowitt2mqtt.helpers.publisher.mqtt.hass import HomeAssistantDiscoveryPublisher
@@ -6982,39 +6981,6 @@ async def test_publish_display_precision_binary_sensor(
 
     configs = _get_published_configs(mock_aiomqtt_client)
     assert "suggested_display_precision" not in configs["srain_piezo"]
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "config",
-    [
-        TEST_CONFIG_JSON
-        | {CONF_HASS_DISCOVERY: True, CONF_HASS_DISCOVERY_DISPLAY_PRECISION: True}
-    ],
-)
-async def test_publish_display_precision_unitless_channelized(
-    ecowitt: Ecowitt,
-    mock_aiomqtt_client: MagicMock,
-) -> None:
-    """Test display precision for a unitless data point that carries a channel number.
-
-    Keys such as "soilad1" have no calculator and therefore no entity description to
-    match against, so their precision is resolved by glob instead.
-
-    Args:
-        ecowitt: A parsed Ecowitt object.
-        mock_aiomqtt_client: A mock aiomqtt Client object.
-    """
-    publisher = get_publishers(ecowitt.configs.default_config, mock_aiomqtt_client)[0]
-    assert isinstance(publisher, HomeAssistantDiscoveryPublisher)
-
-    for payload_key in ("soilad1", "soilad16"):
-        data_point = CalculatedDataPoint(data_point_key=payload_key, value=175.0)
-        assert publisher._get_display_precision(data_point, None) == 0  # noqa: SLF001
-
-    # A unitless string-valued data point must still get nothing:
-    data_point = CalculatedDataPoint(data_point_key="frostrisk", value="No risk")
-    assert publisher._get_display_precision(data_point, None) is None  # noqa: SLF001
 
 
 @pytest.mark.asyncio
